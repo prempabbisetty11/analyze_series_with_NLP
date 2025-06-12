@@ -4,6 +4,7 @@ import os
 import sys
 import pathlib
 from ast import literal_eval
+import re
 folder_path = pathlib.Path().parent.resolve()
 sys.path.append(os.path.join(folder_path, '../'))
 import pandas as pd
@@ -12,15 +13,13 @@ from glob import glob
 class NameEntityRecognizer:
     def __init__(self):
         self.nlp_model = self.load_model()
-        pass
 
     def load_model(self):
         nlp = spacy.load("en_core_web_trf")
         return nlp
-    
+
     def get_ners_inference(self, script):
         script_sentences = sent_tokenize(script)
-
         ner_output = []
 
         for sentence in script_sentences:
@@ -35,26 +34,21 @@ class NameEntityRecognizer:
             ner_output.append(ners)
 
         return ner_output
-    
+
     @staticmethod
     def load_subtitles_dataset(dataset_path):
-        import pandas as pd
-        from glob import glob
-        import os
-        import re
-
         subtitles_path = glob(os.path.join(dataset_path, "*.ass"))
 
         scripts = []
         episode_num = []
 
-        for path in subtitles_path:
+        for file_path in subtitles_path:
             try:
-                with open(path, 'r', encoding='utf-8') as file:
-                    lines = file.readlines()
-            except UnicodeDecodeError:
-                with open(path, 'r', encoding='utf-8-sig') as file:
-                    lines = file.readlines()
+                file_content = pd.read_csv(file_path, sep='\n', header=None, encoding='utf-8', engine='python', quoting=3)
+                lines = file_content[0].tolist()
+            except Exception as e:
+                print(f"⚠️ Skipping file due to read error: {file_path}, Reason: {e}")
+                continue
 
             # Filter only Dialogue lines
             dialogue_lines = [line for line in lines if line.startswith("Dialogue:")]
@@ -64,7 +58,7 @@ class NameEntityRecognizer:
             script = " ".join(script_lines)
 
             # Extract episode number
-            match = re.search(r'(\d+)\.ass$', path)
+            match = re.search(r'(\d+)\.ass$', file_path)
             episode = int(match.group(1)) if match else 0
 
             scripts.append(script)
@@ -73,15 +67,14 @@ class NameEntityRecognizer:
         df = pd.DataFrame({"episode": episode_num, "script": scripts})
         return df
 
-
     def get_ners(self, dataset_path, save_path=None):
         if save_path is not None and os.path.exists(save_path):
             df = pd.read_csv(save_path)
-            df['ners'] = df['ners'].apply(lambda x: literal_eval(x)  if isinstance(x,str) else x)
+            df['ners'] = df['ners'].apply(lambda x: literal_eval(x) if isinstance(x, str) else x)
             return df
 
         # load dataset
-        df = self.load_subtitles_dataset("C:/code_live/data/Subtitles")
+        df = self.load_subtitles_dataset(dataset_path)
         df = df.head(10)
 
         # Run Inferences

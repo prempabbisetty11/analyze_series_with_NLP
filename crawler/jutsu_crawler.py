@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 
 class BlogSpider(scrapy.Spider):
     name = 'narutospider'
-    start_urls = ["https://naruto.fandom.com/wiki/Category:Jutsu"]
+    start_urls = ['https://naruto.fandom.com/wiki/Special:BrowseData/Jutsu?limit=250&offset=0&_cat=Jutsu']
 
     def parse(self, response):
         for href in response.css('.smw-columnlist-container')[0].css("a::attr(href)").extract():
@@ -11,7 +11,7 @@ class BlogSpider(scrapy.Spider):
                            callback=self.parse_jutsu)
             yield extracted_data
         
-        for next_page in response.css('a.mw-nextlink')[0].css("a::att(href)").extract():
+        for next_page in response.css('a.mw-nextlink'):
             yield response.follow(next_page, self.parse)
 
     def parse_jutsu(self, response):

@@ -6,6 +6,7 @@ from text_classification import JutsuClassifier
 import os
 from dotenv import load_dotenv
 load_dotenv()
+from character_chatbot import CharacterChatbot
 
 
 def get_themes(theme_list_str, subtitles_list, save_path):
@@ -45,7 +46,7 @@ def get_character_network(subtitles_path, ner_path):
     html = character_network_generator.draw_network_graph(relationship_df)
 
     return html
-
+ 
 def classify_text(text_classification_model, text_classification_data_path, text_to_classify):
     justu_classifier = JutsuClassifier(
         model_path=text_classification_model,
@@ -53,8 +54,17 @@ def classify_text(text_classification_model, text_classification_data_path, text
         huggingface_token=os.getenv('huggingface_token')
     )
     output = justu_classifier.classify_jutsu(text_to_classify)
+    output = output[0]
     return output
 
+def chat_with_character_chatbot(message, history):
+    character_chatbot = CharacterChatbot("prempabbisetty/Naruto_Llama-3-8B",
+                                         huggingface_token=os.getenv('huggingface_token')
+                                         )
+    
+    output = character_chatbot.chat(message, history)
+    output = output['content'].strip()
+    return output
 
 def main():
     with gr.Blocks() as iface:
@@ -111,6 +121,13 @@ def main():
                             outputs=[test_classification_output]
                         )
         
+        # Character Chatbot Section
+        with gr.Row():
+            with gr.Column():
+                gr.HTML("<h1>Character Chatbot</h1>")
+                gr.ChatInterface(chat_with_character_chatbot)
+
+    
 
     iface.launch(share=True)
 
