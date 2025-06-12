@@ -81,7 +81,7 @@ class CharacterChatbot():
         pipeline = transformers.pipeline("text-generation",
                                             model=model_path,
                                             model_kwargs={"torch_dtype": torch.float16,
-                                                          quantization_config=bnb_config,
+                                                          "quantization_config":bnb_config
                                             }
         )
         return pipeline
