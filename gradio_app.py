@@ -1,31 +1,40 @@
 import gradio as gr
+import pandas as pd
 from theme_classifier import ThemeClassifier
 from character_network import NameEntityRecognizer, CharacterNetworkGenerator
+from text_classification import JutsuClassifier
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 
 def get_themes(theme_list_str, subtitles_list, save_path):
-    theme_list = theme_list_str.split(',')
+    # Lowercase and strip user input
+    theme_list = [theme.strip().lower() for theme in theme_list_str.split(',') if theme.strip() and theme.strip().lower() != 'dialogue']
+    
     theme_classifier = ThemeClassifier(theme_list)
     output_df = theme_classifier.get_themes(subtitles_list, save_path)
 
-    # Remove 'dialogue' if it's in the list
-    theme_list = [theme for theme in theme_list if theme != 'dialogue']
-    output_df = output_df[theme_list]
+    # Lowercase and strip DataFrame columns
+    output_columns = [col.strip().lower() for col in output_df.columns]
 
-    output_df = output_df[theme_list].sum().reset_index()
-    output_df.columns = ['Theme', 'Score']
+    print("\n Output DataFrame Columns:", list(output_df.columns))
+    print(" User Provided Themes:", theme_list)
 
-    output_chart = gr.BarPlot(
-        output_df,
-        x='Theme',
-        y="Score",
-        title="Series Themes",
-        tooltip=["Theme", "Score"],
-        vertical=False,
-        width=500,
-        height=260
-    )
+    # Find valid themes by matching lowercased/stripped names
+    valid_themes = [output_df.columns[i] for i, col in enumerate(output_columns) if col in theme_list]
 
-    return output_chart
+    if not valid_themes:
+        print(" None of the themes you entered matched the model output.")
+        print("Available output columns were:", output_df.columns.tolist())
+        return pd.DataFrame({
+            "Theme": ["No matching themes found. Available columns: " + ", ".join(output_df.columns)],
+            "Score": [0]
+        })
+
+    theme_scores = output_df[valid_themes].sum().reset_index()
+    theme_scores.columns = ['Theme', 'Score']
+    return theme_scores
 
 def get_character_network(subtitles_path, ner_path):
     ner = NameEntityRecognizer()
@@ -37,6 +46,16 @@ def get_character_network(subtitles_path, ner_path):
 
     return html
 
+def classify_text(text_classification_model, text_classification_data_path, text_to_classify):
+    justu_classifier = JutsuClassifier(
+        model_path=text_classification_model,
+        data_path=text_classification_data_path,
+        huggingface_token=os.getenv('huggingface_token')
+    )
+    output = justu_classifier.classify_jutsu(text_to_classify)
+    return output
+
+
 def main():
     with gr.Blocks() as iface:
         # Theme Classification Section
@@ -45,7 +64,15 @@ def main():
                 gr.HTML("<h1>Theme Classification (Zero Shot Classifier)</h1>")
                 with gr.Row():
                     with gr.Column():
-                        plot = gr.BarPlot()
+                        plot = gr.BarPlot(
+                            x='Theme',
+                            y='Score',
+                            title="Series Themes",
+                            tooltip=["Theme", "Score"],
+                            vertical=False,
+                            width=500,
+                            height=260
+                        )
                     with gr.Column():
                         theme_list = gr.Textbox(label="Themes")
                         subtitles_path_1 = gr.Textbox(label="Subtitles or Script Path")
@@ -65,6 +92,25 @@ def main():
                         ner_path = gr.Textbox(label="NERs Save Path")
                         get_network_graph_button = gr.Button("Get Character Network")
                         get_network_graph_button.click(get_character_network, inputs=[subtitles_path_2, ner_path], outputs=[network_html])
+
+        # Text Classification with LLms
+        with gr.Row():
+            with gr.Column():
+                gr.HTML("<h1>Text Classification with LLms</h1>")
+                with gr.Row():
+                    with gr.Column():
+                        test_classification_output = gr.Textbox(label="Test Classification Output")
+                    with gr.Column():
+                        text_classification_model = gr.Textbox(label="Model Path")
+                        text_classification_data_path = gr.Textbox(label="Data Path")
+                        text_to_classify = gr.Textbox(label="Text Input")
+                        classify_text_button = gr.Button("Classify Text (Justu)")
+                        classify_text_button.click(
+                            classify_text,
+                            inputs=[text_classification_model, text_classification_data_path, text_to_classify],
+                            outputs=[test_classification_output]
+                        )
+        
 
     iface.launch(share=True)
 
